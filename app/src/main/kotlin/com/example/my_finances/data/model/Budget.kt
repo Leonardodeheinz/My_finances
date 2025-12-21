@@ -66,7 +66,7 @@ data class Contract(
     val description: String = "",
     val amount: Double = 0.0,
     val month: Int = 0,
-    val year: Int = 0,
+    val year : Int = 0,
     val startDate: Date = Date(),
     val endDate: Date = Date(),
     val status: ContractStatus = ContractStatus.OPEN,

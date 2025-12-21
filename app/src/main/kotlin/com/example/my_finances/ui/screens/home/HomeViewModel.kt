@@ -3,6 +3,7 @@ package com.example.my_finances.ui.screens.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.my_finances.data.model.AuthResult
+import com.example.my_finances.data.model.Category
 import com.example.my_finances.data.model.Contract
 import com.example.my_finances.data.model.Debt
 import com.example.my_finances.data.model.Transaction
@@ -29,7 +30,8 @@ class HomeViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
     private val transactionRepository: TransactionRepository,
     private val contractRepository: ContractRepository,
-    private val debtRepository: DebtRepository
+    private val debtRepository: DebtRepository,
+    private val categoryRepository: com.example.my_finances.data.repository.CategoryRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -121,6 +123,16 @@ class HomeViewModel @Inject constructor(
                     if (result is AuthResult.Success) {
                         println("💸 Total debt: ${result.data}")
                         _uiState.update { it.copy(totalDebt = result.data) }
+                    }
+                }
+            }
+
+            // Load categories
+            launch {
+                categoryRepository.getAll().collect { result ->
+                    if (result is AuthResult.Success) {
+                        println("🏷️ Loaded ${result.data.size} categories")
+                        _uiState.update { it.copy(categories = result.data) }
                     }
                 }
             }
@@ -225,6 +237,53 @@ class HomeViewModel @Inject constructor(
                     loadFinancialData()
                 }
             }
+        }
+    }
+
+    // Category management functions
+    fun addCategory(category: Category) {
+        viewModelScope.launch {
+            categoryRepository.insert(category).collect { result ->
+                if (result is AuthResult.Success) {
+                    println("✅ Category added successfully: ${result.data}")
+                    loadFinancialData()
+                }
+            }
+        }
+    }
+
+    fun updateCategory(category: Category) {
+        viewModelScope.launch {
+            categoryRepository.update(category.id, category).collect { result ->
+                if (result is AuthResult.Success) {
+                    loadFinancialData()
+                }
+            }
+        }
+    }
+
+    fun deleteCategory(id: String) {
+        viewModelScope.launch {
+            categoryRepository.delete(id).collect { result ->
+                if (result is AuthResult.Success) {
+                    loadFinancialData()
+                }
+            }
+        }
+    }
+
+    /**
+     * Get category suggestion based on transaction description
+     * Looks for previous transactions with similar descriptions
+     */
+    fun getCategorySuggestion(description: String): Category? {
+        val transactions = _uiState.value.recentTransactions
+        val matchingTransaction = transactions
+            .filter { it.description.contains(description, ignoreCase = true) && it.categoryId.isNotEmpty() }
+            .maxByOrNull { it.createdAt }
+
+        return matchingTransaction?.let { transaction ->
+            _uiState.value.categories.firstOrNull { it.id == transaction.categoryId }
         }
     }
 }

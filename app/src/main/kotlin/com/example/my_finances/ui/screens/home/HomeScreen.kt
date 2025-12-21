@@ -64,6 +64,7 @@ import com.example.my_finances.data.model.Transaction
 import com.example.my_finances.ui.components.AddContractDialog
 import com.example.my_finances.ui.components.AddDebtDialog
 import com.example.my_finances.ui.components.AddTransactionDialog
+import com.example.my_finances.ui.components.CategoryManagementDialog
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -80,6 +81,7 @@ fun HomeScreen(
     var showAddContractDialog by remember { mutableStateOf(false) }
     var showAddDebtDialog by remember { mutableStateOf(false) }
     var showFabMenu by remember { mutableStateOf(false) }
+    var showCategoryManagement by remember { mutableStateOf(false) }
 
     var editingTransaction by remember { mutableStateOf<Transaction?>(null) }
     var editingContract by remember { mutableStateOf<Contract?>(null) }
@@ -102,7 +104,14 @@ fun HomeScreen(
                 }
                 editingTransaction = null
             },
-            transaction = editingTransaction
+            transaction = editingTransaction,
+            categories = uiState.categories,
+            onAddCategory = { category ->
+                viewModel.addCategory(category)
+            },
+            getCategorySuggestion = { description ->
+                viewModel.getCategorySuggestion(description)
+            }
         )
     }
 
@@ -139,6 +148,22 @@ fun HomeScreen(
                 editingDebt = null
             },
             debt = editingDebt
+        )
+    }
+
+    if (showCategoryManagement) {
+        CategoryManagementDialog(
+            categories = uiState.categories,
+            onDismiss = { showCategoryManagement = false },
+            onAddCategory = { category ->
+                viewModel.addCategory(category)
+            },
+            onUpdateCategory = { category ->
+                viewModel.updateCategory(category)
+            },
+            onDeleteCategory = { categoryId ->
+                viewModel.deleteCategory(categoryId)
+            }
         )
     }
 
@@ -241,7 +266,8 @@ fun HomeScreen(
                     BalanceCard(
                         balance = uiState.totalBalance,
                         income = uiState.monthlyIncome,
-                        expenses = uiState.monthlyExpenses
+                        expenses = uiState.monthlyExpenses,
+                        onClick = { showCategoryManagement = true }
                     )
                 }
 
@@ -379,12 +405,14 @@ fun HomeScreen(
 private fun BalanceCard(
     balance: Double,
     income: Double,
-    expenses: Double
+    expenses: Double,
+    onClick: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(180.dp),
+            .height(180.dp)
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
         ),
