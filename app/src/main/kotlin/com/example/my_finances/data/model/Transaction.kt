@@ -1,9 +1,12 @@
 package com.example.my_finances.data.model
 
+import androidx.annotation.Keep
+import com.google.firebase.firestore.DocumentId
 import java.util.Date
 
+@Keep
 data class Transaction(
-    val id: String = "",
+    @DocumentId val id: String = "",
     val userId: String = "",
     val amount: Double = 0.0,
     val type: TransactionType = TransactionType.EXPENSE,

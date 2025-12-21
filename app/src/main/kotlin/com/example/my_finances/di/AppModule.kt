@@ -3,10 +3,14 @@ package com.example.my_finances.di
 import android.content.Context
 import com.example.my_finances.data.repository.BudgetRepository
 import com.example.my_finances.data.repository.CategoryRepository
+import com.example.my_finances.data.repository.ContractRepository
+import com.example.my_finances.data.repository.DebtRepository
 import com.example.my_finances.data.repository.FirebaseAuthDataSource
 import com.example.my_finances.data.repository.TransactionRepository
 import com.example.my_finances.data.repository.impl.BudgetRepositoryImpl
 import com.example.my_finances.data.repository.impl.CategoryRepositoryImpl
+import com.example.my_finances.data.repository.impl.ContractRepositoryImpl
+import com.example.my_finances.data.repository.impl.DebtRepositoryImpl
 import com.example.my_finances.data.repository.impl.TransactionRepositoryImpl
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -74,5 +78,23 @@ object AppModule {
         auth: FirebaseAuth
     ): BudgetRepository {
         return BudgetRepositoryImpl(firestore, auth)
+    }
+
+    @Provides
+    @Singleton
+    fun provideContractRepository(
+        firestore: FirebaseFirestore,
+        auth: FirebaseAuth
+    ): ContractRepository {
+        return ContractRepositoryImpl(firestore, auth)
+    }
+
+    @Provides
+    @Singleton
+    fun provideDebtRepository(
+        firestore: FirebaseFirestore,
+        auth: FirebaseAuth
+    ): DebtRepository {
+        return DebtRepositoryImpl(firestore, auth)
     }
 }

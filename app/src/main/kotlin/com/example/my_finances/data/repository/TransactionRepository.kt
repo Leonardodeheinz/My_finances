@@ -36,4 +36,6 @@ interface TransactionRepository : BaseRepository<Transaction> {
      * Observe transactions with real-time updates for a date range
      */
     fun observeByDateRange(startDate: Date, endDate: Date): Flow<AuthResult<List<Transaction>>>
+
+
 }
