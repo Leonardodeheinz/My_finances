@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.TrendingDown
@@ -60,11 +61,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.my_finances.data.model.Contract
 import com.example.my_finances.data.model.Debt
+import com.example.my_finances.data.model.DebtStatus
 import com.example.my_finances.data.model.Transaction
+import com.example.my_finances.data.model.TransactionType
+import com.example.my_finances.ui.components.AddCategoryDialog
 import com.example.my_finances.ui.components.AddContractDialog
 import com.example.my_finances.ui.components.AddDebtDialog
 import com.example.my_finances.ui.components.AddTransactionDialog
-import com.example.my_finances.ui.components.CategoryManagementDialog
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -73,6 +76,7 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     onNavigateToProfile: () -> Unit,
+    onNavigateToFilteredList: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -81,7 +85,8 @@ fun HomeScreen(
     var showAddContractDialog by remember { mutableStateOf(false) }
     var showAddDebtDialog by remember { mutableStateOf(false) }
     var showFabMenu by remember { mutableStateOf(false) }
-    var showCategoryManagement by remember { mutableStateOf(false) }
+    var showAddCategoryDialog by remember { mutableStateOf(false) }
+    var categoryTypeForDialog by remember { mutableStateOf(TransactionType.EXPENSE) }
 
     var editingTransaction by remember { mutableStateOf<Transaction?>(null) }
     var editingContract by remember { mutableStateOf<Contract?>(null) }
@@ -151,19 +156,14 @@ fun HomeScreen(
         )
     }
 
-    if (showCategoryManagement) {
-        CategoryManagementDialog(
-            categories = uiState.categories,
-            onDismiss = { showCategoryManagement = false },
-            onAddCategory = { category ->
+    if (showAddCategoryDialog) {
+        AddCategoryDialog(
+            onDismiss = { showAddCategoryDialog = false },
+            onSave = { category ->
                 viewModel.addCategory(category)
+                showAddCategoryDialog = false
             },
-            onUpdateCategory = { category ->
-                viewModel.updateCategory(category)
-            },
-            onDeleteCategory = { categoryId ->
-                viewModel.deleteCategory(categoryId)
-            }
+            transactionType = categoryTypeForDialog
         )
     }
 
@@ -238,6 +238,17 @@ fun HomeScreen(
                             Icon(Icons.Default.AccountBalance, contentDescription = null)
                         }
                     )
+                    DropdownMenuItem(
+                        text = { Text("Add Category") },
+                        onClick = {
+                            showFabMenu = false
+                            categoryTypeForDialog = TransactionType.EXPENSE
+                            showAddCategoryDialog = true
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.Label, contentDescription = null)
+                        }
+                    )
                 }
             }
         }
@@ -267,7 +278,7 @@ fun HomeScreen(
                         balance = uiState.totalBalance,
                         income = uiState.monthlyIncome,
                         expenses = uiState.monthlyExpenses,
-                        onClick = { showCategoryManagement = true }
+                        onClick = onNavigateToFilteredList
                     )
                 }
 
@@ -297,9 +308,14 @@ fun HomeScreen(
                 // Debts Overview (if any)
                 if (uiState.totalDebt > 0 || uiState.openDebts.isNotEmpty()) {
                     item {
+                        val totalMonthlyRepayment = uiState.openDebts
+                            .filter { it.status == DebtStatus.OPEN }
+                            .sumOf { it.repaymentRate }
+
                         DebtOverviewCard(
                             totalDebt = uiState.totalDebt,
-                            debtCount = uiState.openDebts.size
+                            debtCount = uiState.openDebts.size,
+                            monthlyRepayment = totalMonthlyRepayment
                         )
                     }
                 }
@@ -550,7 +566,8 @@ private fun StatCard(
 @Composable
 private fun DebtOverviewCard(
     totalDebt: Double,
-    debtCount: Int
+    debtCount: Int,
+    monthlyRepayment: Double
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -588,12 +605,19 @@ private fun DebtOverviewCard(
                         color = MaterialTheme.colorScheme.error
                     )
                 }
+                Column {
+                    Text(
+                        text = "Already Repaid Amount",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Text(
+                        text = formatCurrency(amount = monthlyRepayment),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onError
+                    )
+                }
             }
-            Text(
-                text = "$debtCount open",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer
-            )
         }
     }
 }

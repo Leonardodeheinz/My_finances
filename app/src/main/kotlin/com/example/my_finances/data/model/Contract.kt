@@ -1,26 +1,27 @@
 package com.example.my_finances.data.model
 
 import androidx.annotation.Keep
-import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 import java.util.Date
 
 @Keep
-data class Budget(
+data class Contract(
     @DocumentId val id: String = "",
-    val userId: String = "",
+    val userid: String = "",
     val categoryId: String = "",
+    val name: String = "",
+    val description: String = "",
     val amount: Double = 0.0,
-    val spent: Double = 0.0,
     val month: Int = 0,
-    val year: Int = 0,
+    val year : Int = 0,
+    val startDate: Date = Date(),
+    val endDate: Date = Date(),
+    val status: ContractStatus = ContractStatus.OPEN,
     val createdAt: Date = Date(),
     val updatedAt: Date = Date()
-) {
-    val remaining: Double
-        get() = amount - spent
+)
 
-    val percentage: Float
-        get() = if (amount > 0) (spent / amount * 100).toFloat() else 0f
+enum class ContractStatus{
+    OPEN,
+    CLOSED,
 }
-

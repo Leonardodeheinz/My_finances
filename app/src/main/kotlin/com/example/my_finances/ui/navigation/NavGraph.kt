@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.my_finances.ui.screens.auth.login.LoginScreen
 import com.example.my_finances.ui.screens.auth.register.RegisterScreen
+import com.example.my_finances.ui.screens.filteredlist.FilteredListScreen
 import com.example.my_finances.ui.screens.home.HomeScreen
 import com.example.my_finances.ui.screens.profile.ProfileScreen
 
@@ -50,6 +51,9 @@ fun NavGraph(
             HomeScreen(
                 onNavigateToProfile = {
                     navController.navigate(Screen.Profile.route)
+                },
+                onNavigateToFilteredList = {
+                    navController.navigate(Screen.FilteredList.route)
                 }
             )
         }
@@ -63,6 +67,14 @@ fun NavGraph(
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
                     }
+                }
+            )
+        }
+
+        composable(Screen.FilteredList.route) {
+            FilteredListScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
                 }
             )
         }
