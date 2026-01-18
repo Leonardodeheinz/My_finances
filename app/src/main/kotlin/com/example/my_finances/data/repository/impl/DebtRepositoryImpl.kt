@@ -28,6 +28,7 @@ class DebtRepositoryImpl @Inject constructor(
         return Debt(
             id = id,
             userId = map["userId"] as? String ?: "",
+            categoryId = map["categoryId"] as? String ?: "",
             creditor = map["creditor"] as? String ?: "",
             description = map["description"] as? String ?: "",
             amount = (map["amount"] as? Number)?.toDouble() ?: 0.0,
@@ -37,6 +38,11 @@ class DebtRepositoryImpl @Inject constructor(
                 map["status"] as? String ?: DebtStatus.OPEN.name
             ),
             dueDate = map["dueDate"] as? Timestamp,
+            paymentDayOfMonth = (map["paymentDayOfMonth"] as? Number)?.toInt() ?: 1,
+            autoCreateTransaction = map["autoCreateTransaction"] as? Boolean ?: false,
+            reminderEnabled = map["reminderEnabled"] as? Boolean ?: false,
+            reminderDaysBefore = (map["reminderDaysBefore"] as? Number)?.toInt() ?: 3,
+            lastReminderSent = map["lastReminderSent"] as? Timestamp,
             createdAt = (map["createdAt"] as? Timestamp)?.toDate() ?: Date(),
             updatedAt = (map["updatedAt"] as? Timestamp)?.toDate() ?: Date()
         )
@@ -46,16 +52,22 @@ class DebtRepositoryImpl @Inject constructor(
         val now = Date()
         val map = hashMapOf<String, Any>(
             "userId" to (currentUserId ?: ""),
+            "categoryId" to item.categoryId,
             "creditor" to item.creditor,
             "description" to item.description,
             "amount" to item.amount,
             "repaymentRate" to item.repaymentRate,
             "paidAmount" to item.paidAmount,
             "status" to item.status.name,
+            "paymentDayOfMonth" to item.paymentDayOfMonth,
+            "autoCreateTransaction" to item.autoCreateTransaction,
+            "reminderEnabled" to item.reminderEnabled,
+            "reminderDaysBefore" to item.reminderDaysBefore,
             "createdAt" to Timestamp(item.createdAt.takeIf { item.id.isNotEmpty() } ?: now),
             "updatedAt" to Timestamp(now)
         )
         item.dueDate?.let { map["dueDate"] = it }
+        item.lastReminderSent?.let { map["lastReminderSent"] = it }
         return map
     }
 
@@ -182,5 +194,25 @@ class DebtRepositoryImpl @Inject constructor(
             }
 
         awaitClose { listener.remove() }
+    }
+
+    override suspend fun updateLastReminderSent(id: String, timestamp: Timestamp): Flow<AuthResult<Unit>> = flow {
+        try {
+            emit(AuthResult.Loading)
+
+            if (currentUserId == null) {
+                emit(AuthResult.Error("User not authenticated"))
+                return@flow
+            }
+
+            firestore.collection("debts")
+                .document(id)
+                .update("lastReminderSent", timestamp)
+                .await()
+
+            emit(AuthResult.Success(Unit))
+        } catch (e: Exception) {
+            emit(AuthResult.Error(e.message ?: "Failed to update last reminder sent"))
+        }
     }
 }

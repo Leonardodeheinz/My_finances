@@ -9,6 +9,7 @@ import java.util.Date
 data class Debt(
     @DocumentId val id: String = "",
     val userId: String = "",
+    val categoryId: String = "",
     val creditor: String = "",
     val description: String = "",
     val amount: Double = 0.0,
@@ -16,6 +17,11 @@ data class Debt(
     val paidAmount: Double = 0.0,
     val status: DebtStatus = DebtStatus.OPEN,
     val dueDate: Timestamp? = null,
+    val paymentDayOfMonth: Int = 1,
+    val autoCreateTransaction: Boolean = false,
+    val reminderEnabled: Boolean = false,
+    val reminderDaysBefore: Int = 3,
+    val lastReminderSent: Timestamp? = null,
     val createdAt: Date = Date(),
     val updatedAt: Date = Date()
 )

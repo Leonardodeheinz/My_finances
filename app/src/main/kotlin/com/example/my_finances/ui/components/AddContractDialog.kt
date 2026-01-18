@@ -7,7 +7,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.AlertDialog
@@ -21,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -29,9 +34,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.my_finances.data.model.Category
 import com.example.my_finances.data.model.Contract
 import com.example.my_finances.data.model.ContractStatus
 import java.text.SimpleDateFormat
@@ -44,20 +51,25 @@ import java.util.Locale
 fun AddContractDialog(
     onDismiss: () -> Unit,
     onSave: (Contract) -> Unit,
-    contract: Contract? = null
+    contract: Contract? = null,
+    categories: List<Category> = emptyList()
 ) {
     var name by remember { mutableStateOf(contract?.name ?: "") }
     var description by remember { mutableStateOf(contract?.description ?: "") }
     var amount by remember { mutableStateOf(contract?.amount?.toString() ?: "") }
+    var selectedCategory by remember { mutableStateOf<Category?>(
+        categories.firstOrNull { it.id == contract?.categoryId }
+    ) }
 
+    // Payment day of month
+    var paymentDayOfMonth by remember { mutableStateOf(contract?.paymentDayOfMonth?.toString() ?: "1") }
 
-    val startDate by remember { mutableStateOf(contract?.startDate ?: "") }
-    val startDateText by remember {
+    var startDate by remember { mutableStateOf(contract?.startDate) }
+    var startDateText by remember {
         mutableStateOf(
             contract?.startDate?.let {
                 SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(it)
             } ?: ""
-
         )
     }
 
@@ -73,6 +85,10 @@ fun AddContractDialog(
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
 
+    // Reminder state
+    var reminderEnabled by remember { mutableStateOf(contract?.reminderEnabled ?: false) }
+    var reminderDaysBefore by remember { mutableStateOf(contract?.reminderDaysBefore?.toString() ?: "30") }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -80,7 +96,9 @@ fun AddContractDialog(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Name input
@@ -101,6 +119,27 @@ fun AddContractDialog(
                     maxLines = 3
                 )
 
+                // Category selection
+                if (categories.isNotEmpty()) {
+                    Text(
+                        text = "Category",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(categories) { category ->
+                            FilterChip(
+                                selected = selectedCategory?.id == category.id,
+                                onClick = {
+                                    selectedCategory = if (selectedCategory?.id == category.id) null else category
+                                },
+                                label = { Text(category.name) }
+                            )
+                        }
+                    }
+                }
+
                 // Amount input
                 OutlinedTextField(
                     value = amount,
@@ -109,6 +148,22 @@ fun AddContractDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
+                )
+
+                // Payment day of month
+                OutlinedTextField(
+                    value = paymentDayOfMonth,
+                    onValueChange = {
+                        val day = it.toIntOrNull()
+                        if (it.isEmpty() || (day != null && day in 1..31)) {
+                            paymentDayOfMonth = it
+                        }
+                    },
+                    label = { Text("Payment Day of Month (1-31)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    supportingText = { Text("Day when the monthly payment is taken") }
                 )
 
                 // Start Date input with DatePicker
@@ -162,6 +217,35 @@ fun AddContractDialog(
                     placeholder = { Text("Select end date") }
                 )
 
+                // Reminder toggle
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Enable Reminder",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Switch(
+                        checked = reminderEnabled,
+                        onCheckedChange = { reminderEnabled = it }
+                    )
+                }
+
+                // Reminder days input (only show when reminder is enabled)
+                if (reminderEnabled) {
+                    OutlinedTextField(
+                        value = reminderDaysBefore,
+                        onValueChange = { reminderDaysBefore = it },
+                        label = { Text("Remind days before end date") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+
                 // Status selection (only show if editing)
                 if (contract != null) {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -191,6 +275,8 @@ fun AddContractDialog(
             Button(
                 onClick = {
                     val amountValue = amount.toDoubleOrNull() ?: 0.0
+                    val reminderDays = reminderDaysBefore.toIntOrNull() ?: 30
+                    val paymentDay = paymentDayOfMonth.toIntOrNull() ?: 1
                     if (amountValue > 0 && name.isNotBlank()) {
                         val now = Date()
                         val calendar = Calendar.getInstance()
@@ -203,19 +289,26 @@ fun AddContractDialog(
                             endCalendar.time
                         }
 
+                        // Use selected start date or default to now
+                        val finalStartDate = startDate ?: now
+
                         onSave(
                             Contract(
                                 id = contract?.id ?: "",
                                 userid = contract?.userid ?: "",
-                                categoryId = contract?.categoryId ?: "",
+                                categoryId = selectedCategory?.id ?: "",
                                 name = name,
                                 description = description,
                                 amount = amountValue,
                                 month = calendar.get(Calendar.MONTH) + 1,
                                 year = calendar.get(Calendar.YEAR),
-                                startDate = contract?.startDate ?: now,
+                                startDate = finalStartDate,
                                 endDate = finalEndDate,
-                                status = status
+                                paymentDayOfMonth = paymentDay.coerceIn(1, 31),
+                                status = status,
+                                reminderEnabled = reminderEnabled,
+                                reminderDaysBefore = reminderDays,
+                                lastReminderSent = contract?.lastReminderSent
                             )
                         )
                         onDismiss()
@@ -232,10 +325,10 @@ fun AddContractDialog(
         }
     )
 
-    // DatePickerDialog
+    // Start DatePickerDialog
     if (showStartDatePicker) {
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = endDate?.time ?: System.currentTimeMillis()
+            initialSelectedDateMillis = startDate?.time ?: System.currentTimeMillis()
         )
 
         DatePickerDialog(
@@ -244,9 +337,8 @@ fun AddContractDialog(
                 TextButton(
                     onClick = {
                         datePickerState.selectedDateMillis?.let { millis ->
-                            endDate = Date(millis)
-                            endDateText =
-                                SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(endDate)
+                            startDate = Date(millis)
+                            startDateText = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(startDate)
                         }
                         showStartDatePicker = false
                     }
@@ -261,8 +353,6 @@ fun AddContractDialog(
             }
         ) {
             DatePicker(state = datePickerState)
-
-
         }
     }
 // End DatePickerDialog

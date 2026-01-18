@@ -36,9 +36,13 @@ class ContractRepositoryImpl @Inject constructor(
             year = (map["year"] as? Number)?.toInt() ?: 0,
             startDate = (map["startDate"] as? Timestamp)?.toDate() ?: Date(),
             endDate = (map["endDate"] as? Timestamp)?.toDate() ?: Date(),
+            paymentDayOfMonth = (map["paymentDayOfMonth"] as? Number)?.toInt() ?: 1,
             status = ContractStatus.valueOf(
                 map["status"] as? String ?: ContractStatus.OPEN.name
             ),
+            reminderEnabled = map["reminderEnabled"] as? Boolean ?: false,
+            reminderDaysBefore = (map["reminderDaysBefore"] as? Number)?.toInt() ?: 30,
+            lastReminderSent = map["lastReminderSent"] as? Timestamp,
             createdAt = (map["createdAt"] as? Timestamp)?.toDate() ?: Date(),
             updatedAt = (map["updatedAt"] as? Timestamp)?.toDate() ?: Date()
         )
@@ -46,7 +50,7 @@ class ContractRepositoryImpl @Inject constructor(
 
     override fun toMap(item: Contract): Map<String, Any> {
         val now = Date()
-        return hashMapOf(
+        val map = hashMapOf<String, Any>(
             "userId" to (currentUserId ?: ""),
             "categoryId" to item.categoryId,
             "name" to item.name,
@@ -56,10 +60,15 @@ class ContractRepositoryImpl @Inject constructor(
             "year" to item.year,
             "startDate" to Timestamp(item.startDate),
             "endDate" to Timestamp(item.endDate),
+            "paymentDayOfMonth" to item.paymentDayOfMonth,
             "status" to item.status.name,
+            "reminderEnabled" to item.reminderEnabled,
+            "reminderDaysBefore" to item.reminderDaysBefore,
             "createdAt" to Timestamp(item.createdAt.takeIf { item.id.isNotEmpty() } ?: now),
             "updatedAt" to Timestamp(now)
         )
+        item.lastReminderSent?.let { map["lastReminderSent"] = it }
+        return map
     }
 
     override fun getBaseQuery(): Query {
@@ -141,5 +150,25 @@ class ContractRepositoryImpl @Inject constructor(
             }
 
         awaitClose { listener.remove() }
+    }
+
+    override suspend fun updateLastReminderSent(id: String, timestamp: Timestamp): Flow<AuthResult<Unit>> = flow {
+        try {
+            emit(AuthResult.Loading)
+
+            if (currentUserId == null) {
+                emit(AuthResult.Error("User not authenticated"))
+                return@flow
+            }
+
+            firestore.collection("contracts")
+                .document(id)
+                .update("lastReminderSent", timestamp)
+                .await()
+
+            emit(AuthResult.Success(Unit))
+        } catch (e: Exception) {
+            emit(AuthResult.Error(e.message ?: "Failed to update last reminder sent"))
+        }
     }
 }

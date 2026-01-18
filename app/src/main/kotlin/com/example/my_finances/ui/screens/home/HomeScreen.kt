@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
@@ -24,6 +27,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Receipt
@@ -33,6 +37,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -59,15 +64,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.my_finances.data.model.Budget
+import com.example.my_finances.data.model.Category
 import com.example.my_finances.data.model.Contract
 import com.example.my_finances.data.model.Debt
 import com.example.my_finances.data.model.DebtStatus
 import com.example.my_finances.data.model.Transaction
 import com.example.my_finances.data.model.TransactionType
-import com.example.my_finances.ui.components.AddCategoryDialog
+import com.example.my_finances.ui.components.AddBudgetDialog
 import com.example.my_finances.ui.components.AddContractDialog
+import com.example.my_finances.ui.components.CategoryManagementDialog
 import com.example.my_finances.ui.components.AddDebtDialog
 import com.example.my_finances.ui.components.AddTransactionDialog
+import com.example.my_finances.ui.components.BudgetDetailDialog
+import com.example.my_finances.ui.components.BudgetOverviewCard
+import com.example.my_finances.ui.components.ExportDialog
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -84,13 +95,18 @@ fun HomeScreen(
     var showAddTransactionDialog by remember { mutableStateOf(false) }
     var showAddContractDialog by remember { mutableStateOf(false) }
     var showAddDebtDialog by remember { mutableStateOf(false) }
+    var showAddBudgetDialog by remember { mutableStateOf(false) }
     var showFabMenu by remember { mutableStateOf(false) }
-    var showAddCategoryDialog by remember { mutableStateOf(false) }
-    var categoryTypeForDialog by remember { mutableStateOf(TransactionType.EXPENSE) }
+    var showCategoryManagementDialog by remember { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
 
     var editingTransaction by remember { mutableStateOf<Transaction?>(null) }
     var editingContract by remember { mutableStateOf<Contract?>(null) }
     var editingDebt by remember { mutableStateOf<Debt?>(null) }
+    var editingBudget by remember { mutableStateOf<Budget?>(null) }
+
+    var showBudgetDetailDialog by remember { mutableStateOf(false) }
+    var viewingBudget by remember { mutableStateOf<Budget?>(null) }
 
     var expandedContracts by remember { mutableStateOf(false) }
     var expandedDebts by remember { mutableStateOf(false) }
@@ -134,7 +150,8 @@ fun HomeScreen(
                 }
                 editingContract = null
             },
-            contract = editingContract
+            contract = editingContract,
+            categories = uiState.categories
         )
     }
 
@@ -152,18 +169,70 @@ fun HomeScreen(
                 }
                 editingDebt = null
             },
-            debt = editingDebt
+            debt = editingDebt,
+            categories = uiState.categories
         )
     }
 
-    if (showAddCategoryDialog) {
-        AddCategoryDialog(
-            onDismiss = { showAddCategoryDialog = false },
-            onSave = { category ->
+    if (showCategoryManagementDialog) {
+        CategoryManagementDialog(
+            categories = uiState.categories,
+            onDismiss = { showCategoryManagementDialog = false },
+            onAddCategory = { category ->
                 viewModel.addCategory(category)
-                showAddCategoryDialog = false
             },
-            transactionType = categoryTypeForDialog
+            onUpdateCategory = { category ->
+                viewModel.updateCategory(category)
+            },
+            onDeleteCategory = { categoryId ->
+                viewModel.deleteCategory(categoryId)
+            }
+        )
+    }
+
+    if (showAddBudgetDialog) {
+        AddBudgetDialog(
+            onDismiss = {
+                showAddBudgetDialog = false
+                editingBudget = null
+            },
+            onSave = { budget ->
+                if (editingBudget != null) {
+                    viewModel.updateBudget(budget)
+                } else {
+                    viewModel.addBudget(budget)
+                }
+                editingBudget = null
+            },
+            budget = editingBudget,
+            categories = uiState.categories
+        )
+    }
+
+    if (showBudgetDetailDialog && viewingBudget != null) {
+        BudgetDetailDialog(
+            budget = viewingBudget!!,
+            categories = uiState.categories,
+            transactions = uiState.allTransactions,
+            debts = uiState.allDebts,
+            contracts = uiState.allContracts,
+            onDismiss = {
+                showBudgetDetailDialog = false
+                viewingBudget = null
+            }
+        )
+    }
+
+    if (showExportDialog) {
+        ExportDialog(
+            transactions = uiState.allTransactions.ifEmpty { uiState.recentTransactions },
+            debts = uiState.allDebts.ifEmpty { uiState.openDebts },
+            contracts = uiState.allContracts.ifEmpty { uiState.activeContracts },
+            categories = uiState.categories,
+            onDismiss = {
+                showExportDialog = false
+                viewModel.clearExportData()
+            }
         )
     }
 
@@ -184,6 +253,17 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            viewModel.loadAllDataForExport()
+                            showExportDialog = true
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FileDownload,
+                            contentDescription = "Export Data"
+                        )
+                    }
                     IconButton(onClick = onNavigateToProfile) {
                         Icon(
                             imageVector = Icons.Default.Person,
@@ -239,11 +319,20 @@ fun HomeScreen(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Add Category") },
+                        text = { Text("Add Budget") },
                         onClick = {
                             showFabMenu = false
-                            categoryTypeForDialog = TransactionType.EXPENSE
-                            showAddCategoryDialog = true
+                            showAddBudgetDialog = true
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.AccountBalanceWallet, contentDescription = null)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Manage Categories") },
+                        onClick = {
+                            showFabMenu = false
+                            showCategoryManagementDialog = true
                         },
                         leadingIcon = {
                             Icon(Icons.Default.Label, contentDescription = null)
@@ -282,40 +371,33 @@ fun HomeScreen(
                     )
                 }
 
-                // Quick Stats Row
+                // Total Counts Row
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        StatCard(
-                            modifier = Modifier.weight(1f),
-                            title = "Budgets",
-                            value = "${uiState.budgets.size}",
-                            icon = Icons.Default.AccountBalanceWallet,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        StatCard(
-                            modifier = Modifier.weight(1f),
-                            title = "Contracts",
-                            value = "${uiState.activeContracts.size}",
-                            icon = Icons.Default.CreditCard,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                    }
+                    TotalCountsCard(
+                        transactionCount = uiState.totalTransactionCount,
+                        debtCount = uiState.totalDebtCount,
+                        contractCount = uiState.totalContractCount,
+                        budgetCount = uiState.totalBudgetCount
+                    )
                 }
 
-                // Debts Overview (if any)
-                if (uiState.totalDebt > 0 || uiState.openDebts.isNotEmpty()) {
+                // Budget Overview
+                if (uiState.budgetsWithSpending.isNotEmpty()) {
                     item {
-                        val totalMonthlyRepayment = uiState.openDebts
-                            .filter { it.status == DebtStatus.OPEN }
-                            .sumOf { it.repaymentRate }
-
-                        DebtOverviewCard(
-                            totalDebt = uiState.totalDebt,
-                            debtCount = uiState.openDebts.size,
-                            monthlyRepayment = totalMonthlyRepayment
+                        BudgetOverviewCard(
+                            budgets = uiState.budgetsWithSpending,
+                            categories = uiState.categories,
+                            onBudgetClick = { budget ->
+                                viewingBudget = budget
+                                showBudgetDetailDialog = true
+                            },
+                            onEditBudget = { budget ->
+                                editingBudget = uiState.budgets.find { it.id == budget.id }
+                                showAddBudgetDialog = true
+                            },
+                            onDeleteBudget = { budget ->
+                                viewModel.deleteBudget(budget.id)
+                            }
                         )
                     }
                 }
@@ -397,9 +479,12 @@ fun HomeScreen(
                         EmptyStateCard(message = "No recent transactions")
                     }
                 } else {
+                    val categoriesMap = uiState.categories.associateBy { it.id }
                     items(uiState.recentTransactions) { transaction ->
+                        val category = categoriesMap[transaction.categoryId]
                         TransactionListItem(
                             transaction = transaction,
+                            category = category,
                             onEdit = {
                                 editingTransaction = transaction
                                 showAddTransactionDialog = true
@@ -522,103 +607,73 @@ private fun BalanceItem(
 }
 
 @Composable
-private fun StatCard(
-    modifier: Modifier = Modifier,
-    title: String,
-    value: String,
-    icon: ImageVector,
-    color: Color
-) {
-    Card(
-        modifier = modifier.height(150.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = color,
-                modifier = Modifier.size(32.dp)
-            )
-            Column {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DebtOverviewCard(
-    totalDebt: Double,
+private fun TotalCountsCard(
+    transactionCount: Int,
     debtCount: Int,
-    monthlyRepayment: Double
+    contractCount: Int,
+    budgetCount: Int
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.AccountBalance,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(32.dp)
-                )
-                Column {
-                    Text(
-                        text = "Total Debt",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                    Text(
-                        text = formatCurrency(totalDebt),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                Column {
-                    Text(
-                        text = "Already Repaid Amount",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                    Text(
-                        text = formatCurrency(amount = monthlyRepayment),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onError
-                    )
-                }
-            }
+            CountItem(
+                count = transactionCount,
+                label = "Transactions",
+                icon = Icons.Default.Receipt
+            )
+            CountItem(
+                count = debtCount,
+                label = "Debts",
+                icon = Icons.Default.AccountBalance
+            )
+            CountItem(
+                count = contractCount,
+                label = "Contracts",
+                icon = Icons.Default.CreditCard
+            )
+            CountItem(
+                count = budgetCount,
+                label = "Budgets",
+                icon = Icons.Default.AccountBalanceWallet
+            )
         }
+    }
+}
+
+@Composable
+private fun CountItem(
+    count: Int,
+    label: String,
+    icon: ImageVector
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -698,9 +753,18 @@ private fun ExpandableSection(
 @Composable
 private fun TransactionListItem(
     transaction: Transaction,
+    category: Category?,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val categoryColor = category?.let {
+        try {
+            Color(android.graphics.Color.parseColor(it.color))
+        } catch (e: Exception) {
+            MaterialTheme.colorScheme.primary
+        }
+    } ?: MaterialTheme.colorScheme.surfaceVariant
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -713,9 +777,25 @@ private fun TransactionListItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Category color indicator
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(categoryColor, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = (category?.name?.firstOrNull() ?.uppercase() ?: "?"),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = transaction.description,
@@ -724,11 +804,37 @@ private fun TransactionListItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(transaction.date),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(transaction.date),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                    if (category != null) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .background(
+                                    categoryColor.copy(alpha = 0.2f),
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = category.name,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = categoryColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
@@ -737,7 +843,7 @@ private fun TransactionListItem(
                 text = formatCurrency(transaction.amount),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
-                color = if (transaction.type.name == "INCOME")
+                color = if (transaction.type == TransactionType.INCOME)
                     MaterialTheme.colorScheme.primary
                 else
                     MaterialTheme.colorScheme.error
@@ -928,12 +1034,35 @@ private fun DebtListItem(
                 }
             }
 
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Progress bar
+            val progressFloat = if (debt.amount > 0) (debt.paidAmount / debt.amount).toFloat().coerceIn(0f, 1f) else 0f
+            LinearProgressIndicator(
+                progress = { progressFloat },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                color = when {
+                    progress >= 100 -> Color(0xFF4CAF50)
+                    progress >= 50 -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.error
+                },
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                Text(
+                    text = "Paid: ${formatCurrency(debt.paidAmount)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Text(
                     text = "Monthly: ${formatCurrency(debt.repaymentRate)}",
                     style = MaterialTheme.typography.bodySmall,

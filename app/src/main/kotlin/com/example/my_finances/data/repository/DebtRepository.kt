@@ -3,6 +3,7 @@ package com.example.my_finances.data.repository
 import com.example.my_finances.data.model.AuthResult
 import com.example.my_finances.data.model.Debt
 import com.example.my_finances.data.model.DebtStatus
+import com.google.firebase.Timestamp
 import kotlinx.coroutines.flow.Flow
 
 interface DebtRepository : BaseRepository<Debt> {
@@ -35,4 +36,9 @@ interface DebtRepository : BaseRepository<Debt> {
      * Observe debts with real-time updates
      */
     fun observeDebts(): Flow<AuthResult<List<Debt>>>
+
+    /**
+     * Update last reminder sent timestamp
+     */
+    suspend fun updateLastReminderSent(id: String, timestamp: Timestamp): Flow<AuthResult<Unit>>
 }
